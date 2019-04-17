@@ -67,7 +67,9 @@ Sets the step size for chirp:
         self._u.set_user_register(4, 256, 0)
 
 Register 5:
-set the clock division ratio for SPI clock:
+set the clock division ratio for SPI clock. 4 means SPI clock is high for 
+4 clock cycles and low for 4 clock cycles, or has 8x lower frequency than 
+the system clock. 
 
         self._u.set_user_register(5, 4, 0)
 
@@ -101,3 +103,20 @@ Chirp driver cycles through the selected rf_divider values in a round robin
 manner and for each rf_divider it would cycle through the selected frequency
 bands.
 
+## License
+
+Apache 2.0:
+
+   Copyright 2019 The Regents of the University of California
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.

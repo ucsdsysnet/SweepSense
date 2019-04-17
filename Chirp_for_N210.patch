@@ -1,27 +1,33 @@
-From d732a43152cffa651daaf052e6f4575ce7846386 Mon Sep 17 00:00:00 2001
+From cb9fcb87ec8ce969c11f92d7a4ea4d6d1daf41f5 Mon Sep 17 00:00:00 2001
 From: Moein Khazraee <mkhazrae@cs.ucsd.edu>
 Date: Tue, 12 Feb 2019 00:39:59 -0800
 Subject: [PATCH] Adding chirp to Ettus N210 with CBX daughter board.
 
 ---
- usrp2/control_lib/Makefile.srcs         |   3 +
- usrp2/control_lib/chirp_CBX_driver.v    | 412 ++++++++++++++++++++++++
- usrp2/control_lib/chirp_band_selector.v | 125 +++++++
- usrp2/control_lib/chirp_spi_core.v      | 134 ++++++++
- usrp2/control_lib/gpio_atr.v            |  10 +-
- usrp2/timing/time_compare.v             |  20 +-
- usrp2/top/N2x0/Makefile.N210R4          |  14 +-
- usrp2/top/N2x0/u2plus_core.v            |  92 +++++-
- 8 files changed, 794 insertions(+), 16 deletions(-)
+ usrp2/control_lib/Makefile.srcs         |   4 +
+ usrp2/control_lib/chirp_CBX_driver.v    | 429 ++++++++++++++++++++++++
+ usrp2/control_lib/chirp_band_selector.v | 142 ++++++++
+ usrp2/control_lib/chirp_spi_core.v      | 154 +++++++++
+ usrp2/control_lib/gpio_atr.v            |  26 +-
+ usrp2/timing/time_compare.v             |  37 +-
+ usrp2/top/N2x0/Makefile.N210R4          |  15 +-
+ usrp2/top/N2x0/u2plus_core.v            | 109 +++++-
+ 8 files changed, 900 insertions(+), 16 deletions(-)
  create mode 100755 usrp2/control_lib/chirp_CBX_driver.v
  create mode 100644 usrp2/control_lib/chirp_band_selector.v
  create mode 100755 usrp2/control_lib/chirp_spi_core.v
 
 diff --git a/usrp2/control_lib/Makefile.srcs b/usrp2/control_lib/Makefile.srcs
-index 42862a50..efa581ea 100644
+index 42862a50..cfe827d1 100644
 --- a/usrp2/control_lib/Makefile.srcs
 +++ b/usrp2/control_lib/Makefile.srcs
-@@ -56,6 +56,9 @@ fifo_to_wb.v \
+@@ -1,4 +1,5 @@
+ #
++# Copyright 2019 The Regents of the University of California
+ # Copyright 2010-2012 Ettus Research LLC
+ #
+ 
+@@ -56,6 +57,9 @@ fifo_to_wb.v \
  gpio_atr.v \
  user_settings.v \
  settings_fifo_ctrl.v \
@@ -33,22 +39,39 @@ index 42862a50..efa581ea 100644
  ))
 diff --git a/usrp2/control_lib/chirp_CBX_driver.v b/usrp2/control_lib/chirp_CBX_driver.v
 new file mode 100755
-index 00000000..4c14cacf
+index 00000000..ed75b494
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_CBX_driver.v
-@@ -0,0 +1,412 @@
+@@ -0,0 +1,429 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
++
 +module chirp_CBX_driver(
-+	      input clock,
-+	      input reset,
-+	      input set_stb_user,
-+	      input [7:0] set_addr_user,
-+	      input [31:0] set_data_user,
-+	      input trigger,
++        input clock,
++        input reset,
++        input set_stb_user,
++        input [7:0] set_addr_user,
++        input [31:0] set_data_user,
++        input trigger,
 +
 +        output [1:0] sen,
 +        output sclk,
 +        output mosi,
-+	      output [7:0] debug,
++        output [7:0] debug,
 +
 +        output counter_sen,
 +        output counter_mosi,
@@ -114,15 +137,15 @@ index 00000000..4c14cacf
 +  always @ (*)
 +    case(set_data_user[7:0])
 +      8'd1:    rf_div_decode = 3'h0;
-+  	  8'd2:    rf_div_decode = 3'h1;
-+  	  8'd4:    rf_div_decode = 3'h2;
-+  	  8'd8:    rf_div_decode = 3'h3;
-+  	  8'd16:   rf_div_decode = 3'h4;
-+  	  8'd32:   rf_div_decode = 3'h5;
-+  	  8'd64:   rf_div_decode = 3'h6;
-+  	  8'd128:  rf_div_decode = 3'h7;
++      8'd2:    rf_div_decode = 3'h1;
++      8'd4:    rf_div_decode = 3'h2;
++      8'd8:    rf_div_decode = 3'h3;
++      8'd16:   rf_div_decode = 3'h4;
++      8'd32:   rf_div_decode = 3'h5;
++      8'd64:   rf_div_decode = 3'h6;
++      8'd128:  rf_div_decode = 3'h7;
 +      // If the user enters a wrong value, set default to divide by 2
-+  	  default: rf_div_decode = 3'h1;
++      default: rf_div_decode = 3'h1;
 +    endcase
 +
 +// integer i;
@@ -130,24 +153,24 @@ index 00000000..4c14cacf
 +  always @ (posedge clock) begin
 +    if (reset) begin
 +        chirp_en         <= 1'b0;
-+  			jump             <= 12'd1024;
-+  			sclk_divider_dac <= 16'd4;
++        jump             <= 12'd1024;
++        sclk_divider_dac <= 16'd4;
 +        select_rf_div    <= 3'h1;
 +        start_ramp       <= 12'h26D;
 +        end_ramp         <= 12'hC1D;
-+  		  rf_div_bit_array <= 8'd2;
++        rf_div_bit_array <= 8'd2;
 +
 +    end else if (set_stb_user == 1'b1) begin
-+  		case (set_addr_user)
++      case (set_addr_user)
 +        8'd1: freq_bit_array[select_rf_div]  <= set_data_user;
-+  		  8'd2: freq_bit_array2[select_rf_div] <= set_data_user;
++        8'd2: freq_bit_array2[select_rf_div] <= set_data_user;
 +        8'd3: chirp_en                       <= set_data_user[0];
-+  		  8'd4: jump                           <= set_data_user[11:0];
-+  		  8'd5: sclk_divider_dac               <= set_data_user[15:0];
-+  		  8'd6: select_rf_div                  <= rf_div_decode;
-+  		  8'd7: start_ramp                     <= set_data_user[11:0];
-+  		  8'd8: end_ramp                       <= set_data_user[11:0];
-+  		  8'd9: rf_div_bit_array               <= set_data_user[7:0];
++        8'd4: jump                           <= set_data_user[11:0];
++        8'd5: sclk_divider_dac               <= set_data_user[15:0];
++        8'd6: select_rf_div                  <= rf_div_decode;
++        8'd7: start_ramp                     <= set_data_user[11:0];
++        8'd8: end_ramp                       <= set_data_user[11:0];
++        8'd9: rf_div_bit_array               <= set_data_user[7:0];
 +      endcase
 +    end
 +  end
@@ -156,7 +179,7 @@ index 00000000..4c14cacf
 +    if (reset)
 +        new_rf_divs_received <= 1'b0;
 +    else if ((set_stb_user == 1'b1) &&
-+  		       (set_addr_user==8'd9))
++             (set_addr_user==8'd9))
 +        new_rf_divs_received <= 1'b1;
 +    else
 +        new_rf_divs_received <= 1'b0;
@@ -204,7 +227,7 @@ index 00000000..4c14cacf
 +  always @ (posedge clock)
 +    if (reset) begin
 +      selected_freq_bit_array  <= 32'd1;
-+  		selected_freq_bit_array2 <= 32'd0;
++      selected_freq_bit_array2 <= 32'd0;
 +    end else if (find_first_band | rf_div_updated) begin
 +      selected_freq_bit_array  <= freq_bit_array[rf_div_r];
 +      selected_freq_bit_array2 <= freq_bit_array2[rf_div_r];
@@ -248,9 +271,9 @@ index 00000000..4c14cacf
 +                       // so we know when we passed the end_ramp
 +
 +  always @ (posedge clock) begin
-+  	if (~full_reset) begin
-+  		start_tr        <= 0;
-+  		state           <= START_CHIRP;
++    if (~full_reset) begin
++      start_tr        <= 0;
++      state           <= START_CHIRP;
 +      counter_reset   <= 1'b1;
 +      counter_latch   <= 1'b0;
 +      update_band     <= 1'b0;
@@ -260,27 +283,27 @@ index 00000000..4c14cacf
 +      ended_chirp     <= 1'b0;
 +    end else begin
 +
-+  	  case(state)
++      case(state)
 +        // We start sending first register value to VCO here (which is reg2)
 +        // Also first band to scan is latched in this state.
-+  	    START_CHIRP: begin
-+  	    	counter         <= 3'd0;
-+  	    	num_bits        <= 6'd32;
-+  	    	device          <= 1'b1;
-+  	    	sclk_divider    <= 16'd4;
-+  	    	state           <= SET_FREQUENCY;
++        START_CHIRP: begin
++          counter         <= 3'd0;
++          num_bits        <= 6'd32;
++          device          <= 1'b1;
++          sclk_divider    <= 16'd4;
++          state           <= SET_FREQUENCY;
 +          // After reset and before full reset the first band is found
 +          // It needs two cycles, one is START_CHIRP and one is first cycle of
 +          // SET_FREQUENCY where the band_r register is not used.
 +          find_first_band <= 1'b0;
-+  	    end
++        end
 +
-+  	    SET_FREQUENCY: begin
-+  	    	// load data selection, first config word is sent from
++        SET_FREQUENCY: begin
++          // load data selection, first config word is sent from
 +          // the previous state and the next 6 config words are sent here
 +          // 0 is not used for the counter value
 +          case (counter)
-+  	    	  3'd0:    load_data <= 32'h01400005;                // Register 5
++            3'd0:    load_data <= 32'h01400005;                // Register 5
 +            3'd1:    load_data <= {9'h0C3,rf_div_r,20'hF423C}; // Register 4
 +            3'd2:    load_data <= {band_r, 26'h300001B};       // Register 3
 +            3'd3:    load_data <= 32'h6500AE52;                // Register 2
@@ -290,14 +313,14 @@ index 00000000..4c14cacf
 +          endcase
 +
 +          // update the current band after sending the request
-+  	      if (counter == 3'd2) begin
++          if (counter == 3'd2) begin
 +            update_band     <= 1'b1;
 +            if (to_roll_over)
 +              update_rf_div <= 1'b1;
 +          end
 +
 +          if (counter == 3'd6) begin // All config words have been sent
-+  	    		// wait_counter <= 14'd0;
++            // wait_counter <= 14'd0;
 +            start_tr     <= 1'b0;
 +            state        <= GENERATE_CHIRP;
 +          end else begin
@@ -312,67 +335,67 @@ index 00000000..4c14cacf
 +
 +          counter <= counter + 3'd1;
 +
-+  	    end
++        end
 +
 +        WAIT_READY_VCO: begin
-+  	    	if (ready == 1)
-+  	    		state <= SET_FREQUENCY;
-+  	    	else
-+  	    		state <= WAIT_READY_VCO;
++          if (ready == 1)
++            state <= SET_FREQUENCY;
++          else
++            state <= WAIT_READY_VCO;
 +
-+  	    	update_band   <= 1'b0;
-+  	    	update_rf_div <= 1'b0;
++          update_band   <= 1'b0;
++          update_rf_div <= 1'b0;
 +          start_tr      <= 1'b0;
-+  	    end
++        end
 +
 +        // WAIT_FOR_VCO_LOCK: begin
-+  	    // 	if(wait_counter == 14'd12000) begin // initializing for DAC
-+  	    // 		wait_counter <= 14'd0;
-+  	    // 		state        <= GENERATE_CHIRP;
-+  	    // 	end else begin // Looping here until time out
-+  	    // 		wait_counter <= wait_counter + 14'd1;
-+  	    // 		state        <= WAIT_FOR_VCO_LOCK;
-+  	    // 	end
-+  	    // end
++        //   if(wait_counter == 14'd12000) begin // initializing for DAC
++        //     wait_counter <= 14'd0;
++        //     state        <= GENERATE_CHIRP;
++        //   end else begin // Looping here until time out
++        //     wait_counter <= wait_counter + 14'd1;
++        //     state        <= WAIT_FOR_VCO_LOCK;
++        //   end
++        // end
 +
-+   	    GENERATE_CHIRP: begin
++         GENERATE_CHIRP: begin
 +          if (~started_chirp) begin
 +            num_bits      <= 6'd24;
-+  	    		device        <= 1'b0;
-+  	    		sclk_divider  <= sclk_divider_dac;
-+  	    		DAC_data      <= start_ramp + jump;
-+  	    		load_data     <= {DAC_prefix, start_ramp, 12'h000};
-+  	    		state         <= WAIT_READY_DAC;
-+  	    		start_tr      <= 1'b1;
++            device        <= 1'b0;
++            sclk_divider  <= sclk_divider_dac;
++            DAC_data      <= start_ramp + jump;
++            load_data     <= {DAC_prefix, start_ramp, 12'h000};
++            state         <= WAIT_READY_DAC;
++            start_tr      <= 1'b1;
 +            started_chirp <= 1'b1;
 +          end else if (ended_chirp) begin
-+  	    	  state     <= WAIT_CYCLES;
++            state     <= WAIT_CYCLES;
 +            started_chirp <= 1'b0;
 +            ended_chirp   <= 1'b0;
 +          end else if (DAC_data >= end_ramp) begin
 +            // set the
-+  	    	  load_data    <= {DAC_prefix, start_ramp, 12'h000};
-+  	    	  state        <= WAIT_READY_DAC;
-+  	    	  start_tr     <= 1'b1;
++            load_data    <= {DAC_prefix, start_ramp, 12'h000};
++            state        <= WAIT_READY_DAC;
++            start_tr     <= 1'b1;
 +            ended_chirp  <= 1'b1;
-+  	    	end else begin
-+  	    	  DAC_data  <= DAC_data + jump;
++          end else begin
++            DAC_data  <= DAC_data + jump;
 +            // SPI sends from MSB, the messages are 24 bits:
 +            // 8 bit prefix, 12 bit data, 4 bits zero
-+  	    	  load_data <= {DAC_prefix, DAC_data[11:0], 12'h000};
-+  	    	  state     <= WAIT_READY_DAC;
-+  	    	  start_tr  <= 1'b1;
-+  	    	end
-+  	    end
++            load_data <= {DAC_prefix, DAC_data[11:0], 12'h000};
++            state     <= WAIT_READY_DAC;
++            start_tr  <= 1'b1;
++          end
++        end
 +
 +        WAIT_READY_DAC: begin
-+  	    	if (ready == 1'b1)
-+  	    		state <= GENERATE_CHIRP;
-+  	    	else
-+  	    		state <= WAIT_READY_DAC;
++          if (ready == 1'b1)
++            state <= GENERATE_CHIRP;
++          else
++            state <= WAIT_READY_DAC;
 +
 +          start_tr <= 1'b0;
-+  	    end
++        end
 +
 +        // Similar to START_CHIRP, used for padding wait time to make loop time
 +        // a round number.
@@ -381,10 +404,10 @@ index 00000000..4c14cacf
 +          if (time_counter[1:0] == 2'b11) begin
 +            state         <= SET_FREQUENCY;
 +            start_tr      <= 1'b0;
-+  	    	  counter       <= 3'd0;
-+  	    	  num_bits      <= 6'd32;
-+  	    	  device        <= 1'b1;
-+  	    	  sclk_divider  <= 16'd4;
++            counter       <= 3'd0;
++            num_bits      <= 6'd32;
++            device        <= 1'b1;
++            sclk_divider  <= 16'd4;
 +            counter_reset <= 1'b1;
 +            counter_latch <= 1'b1;
 +          end else begin
@@ -393,20 +416,20 @@ index 00000000..4c14cacf
 +
 +        default:
 +          state <= START_CHIRP;
-+  	  endcase
-+  	end
++      endcase
++    end
 +  end
 +
 +  // Main SPI module for sending out data to data-collector and DAC
 +  chirp_spi_core # (.DEVICE_COUNT(2)) chirp (
 +          .clock(clock),
-+  	      .reset(full_reset),
-+  	      .sending_edge(device), //two devices have different sending edges
++          .reset(full_reset),
++          .sending_edge(device), //two devices have different sending edges
 +          .device({device, ~device}), //1 hot device select, device 1 has MSB bit
 +          .start(start_tr),
-+  	      .num_bits(num_bits),
-+  	      .sclk_divider(sclk_divider),
-+  	      .set_data(load_data),
++          .num_bits(num_bits),
++          .sclk_divider(sclk_divider),
++          .set_data(load_data),
 +          .ready(ready),
 +          .sen(sen),
 +          .sclk(sclk),
@@ -433,13 +456,13 @@ index 00000000..4c14cacf
 +
 +  chirp_spi_core counter_out (
 +          .clock(clock),
-+  	      .reset(full_reset),
-+  	      .sending_edge(1'b1),
++          .reset(full_reset),
++          .sending_edge(1'b1),
 +          .device(1'b1),
 +          .start(~ready2),
-+  	      .num_bits(6'd20),
-+  	      .sclk_divider(16'd4),
-+  	      .set_data({time_counter_latched,12'd0}),
++          .num_bits(6'd20),
++          .sclk_divider(16'd4),
++          .set_data({time_counter_latched,12'd0}),
 +          .ready(ready2),
 +          .sen(counter_sen),
 +          .sclk(counter_sclk),
@@ -451,10 +474,27 @@ index 00000000..4c14cacf
 +endmodule
 diff --git a/usrp2/control_lib/chirp_band_selector.v b/usrp2/control_lib/chirp_band_selector.v
 new file mode 100644
-index 00000000..d6ce6b65
+index 00000000..805d088b
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_band_selector.v
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,142 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
++
 +// Conidering a one-hot representation of required bands,
 +// as well as knowing the current band it would find the
 +// next band which should be scanned. It rolls over to first
@@ -582,10 +622,30 @@ index 00000000..d6ce6b65
 +endmodule
 diff --git a/usrp2/control_lib/chirp_spi_core.v b/usrp2/control_lib/chirp_spi_core.v
 new file mode 100755
-index 00000000..589d67d6
+index 00000000..b9f2af1d
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_spi_core.v
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,154 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
++
++// This module is driven from simple_spi_core module by USRP with
++// GNU General Public License.
++
 +// Sends data over SPI interface. Chip select (sen) is active low.
 +// It only accepts data when in WAIT_TRIG state and latches it upon
 +// receiving start signal, which should be a single cycle strobe.
@@ -721,10 +781,30 @@ index 00000000..589d67d6
 +
 +endmodule
 diff --git a/usrp2/control_lib/gpio_atr.v b/usrp2/control_lib/gpio_atr.v
-index 82d72b81..1bcd32ec 100644
+index 82d72b81..c0fda086 100644
 --- a/usrp2/control_lib/gpio_atr.v
 +++ b/usrp2/control_lib/gpio_atr.v
-@@ -26,10 +26,10 @@ module gpio_atr
+@@ -1,3 +1,19 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
+ 
+ //
+ // Copyright 2011 Ettus Research LLC
+@@ -26,10 +42,10 @@ module gpio_atr
      inout [WIDTH-1:0] gpio,
      output reg [31:0] gpio_readback
      );
@@ -737,7 +817,7 @@ index 82d72b81..1bcd32ec 100644
     setting_reg #(.my_addr(BASE+0), .width(WIDTH)) reg_idle
       (.clk(clk),.rst(reset),.strobe(set_stb),.addr(set_addr), .in(set_data),
        .out(in_idle),.changed());
-@@ -57,15 +57,15 @@ module gpio_atr
+@@ -57,15 +73,15 @@ module gpio_atr
         2'b10: rgpio <= in_tx;
         2'b11: rgpio <= in_fdx;
       endcase // case ({tx,rx})
@@ -757,10 +837,31 @@ index 82d72b81..1bcd32ec 100644
 +
  endmodule // gpio_atr
 diff --git a/usrp2/timing/time_compare.v b/usrp2/timing/time_compare.v
-index 21607f51..03f4fb52 100644
+index 21607f51..542172d1 100644
 --- a/usrp2/timing/time_compare.v
 +++ b/usrp2/timing/time_compare.v
-@@ -23,11 +23,25 @@ module time_compare
+@@ -1,3 +1,20 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
++
+ //
+ // Copyright 2011-2012 Ettus Research LLC
+ //
+@@ -23,11 +40,25 @@ module time_compare
     input [63:0] trigger_time,
     output now,
     output early,
@@ -790,10 +891,16 @@ index 21607f51..03f4fb52 100644
      assign too_early = 0; //not implemented
  
 diff --git a/usrp2/top/N2x0/Makefile.N210R4 b/usrp2/top/N2x0/Makefile.N210R4
-index 44ce17b3..94b234cc 100644
+index 44ce17b3..8f787318 100644
 --- a/usrp2/top/N2x0/Makefile.N210R4
 +++ b/usrp2/top/N2x0/Makefile.N210R4
-@@ -43,7 +43,7 @@ synthesis_tool "XST (VHDL/Verilog)" \
+@@ -1,4 +1,5 @@
+ #
++# Copyright 2019 The Regents of the University of California
+ # Copyright 2008-2012 Ettus Research LLC
+ #
+ 
+@@ -43,7 +44,7 @@ synthesis_tool "XST (VHDL/Verilog)" \
  simulator "ISE Simulator (VHDL/Verilog)" \
  "Preferred Language" "Verilog" \
  "Enable Message Filtering" FALSE \
@@ -802,7 +909,7 @@ index 44ce17b3..94b234cc 100644
  
  ##################################################
  # Sources
-@@ -78,18 +78,18 @@ TRANSLATE_PROPERTIES = \
+@@ -78,18 +79,18 @@ TRANSLATE_PROPERTIES = \
  
  MAP_PROPERTIES = \
  "Generate Detailed MAP Report" TRUE \
@@ -826,7 +933,7 @@ index 44ce17b3..94b234cc 100644
  
  STATIC_TIMING_PROPERTIES = \
  "Number of Paths in Error/Verbose Report" 10 \
-@@ -100,6 +100,6 @@ GEN_PROG_FILE_PROPERTIES = \
+@@ -100,6 +101,6 @@ GEN_PROG_FILE_PROPERTIES = \
  "Create Binary Configuration File" TRUE \
  "Done (Output Events)" 5 \
  "Enable Bitstream Compression" TRUE \
@@ -835,10 +942,31 @@ index 44ce17b3..94b234cc 100644
  
  SIM_MODEL_PROPERTIES = ""
 diff --git a/usrp2/top/N2x0/u2plus_core.v b/usrp2/top/N2x0/u2plus_core.v
-index 649b7dca..9096cde8 100644
+index 649b7dca..3330402a 100644
 --- a/usrp2/top/N2x0/u2plus_core.v
 +++ b/usrp2/top/N2x0/u2plus_core.v
-@@ -19,6 +19,8 @@
+@@ -1,3 +1,20 @@
++/*
++ * Copyright 2019 The Regents of the University of California
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ */
++
+ //
+ // Copyright 2011-2013 Ettus Research LLC
+ //
+@@ -19,6 +36,8 @@
  // Module Name:    u2_core
  // ////////////////////////////////////////////////////////////////////////////////
  
@@ -847,7 +975,7 @@ index 649b7dca..9096cde8 100644
  module u2plus_core
    (// Clocks
     input dsp_clk,
-@@ -413,6 +415,7 @@ module u2plus_core
+@@ -413,6 +432,7 @@ module u2plus_core
      wire [31:0] spi_debug;
      wire [31:0] spi_readback;
      wire spi_ready;
@@ -855,7 +983,7 @@ index 649b7dca..9096cde8 100644
      simple_spi_core #(.BASE(SR_SPI_CORE), .WIDTH(9)) shared_spi(
          .clock(dsp_clk), .reset(dsp_rst),
          .set_stb(set_stb_dsp), .set_addr(set_addr_dsp), .set_data(set_data_dsp),
-@@ -420,6 +423,86 @@ module u2plus_core
+@@ -420,6 +440,86 @@ module u2plus_core
          .sen({sen_adc, sen_tx_db,sen_tx_adc,sen_tx_dac,sen_rx_db,sen_rx_adc,sen_rx_dac,sen_dac,sen_clk}),
          .sclk(sclk), .mosi(mosi), .miso(miso), .debug(spi_debug)
      );
@@ -942,7 +1070,7 @@ index 649b7dca..9096cde8 100644
  
     // /////////////////////////////////////////////////////////////////////////
     // I2C -- Slave #3
-@@ -435,7 +518,6 @@ module u2plus_core
+@@ -435,7 +535,6 @@ module u2plus_core
  
     // /////////////////////////////////////////////////////////////////////////
     // GPIOs
@@ -950,7 +1078,7 @@ index 649b7dca..9096cde8 100644
     wire [31:0] gpio_readback;
  
     gpio_atr #(.BASE(SR_GPIO), .WIDTH(32))
-@@ -515,6 +597,8 @@ module u2plus_core
+@@ -515,6 +614,8 @@ module u2plus_core
  
      wire [31:0] sfc_debug;
      wire sfc_clear;
@@ -959,11 +1087,11 @@ index 649b7dca..9096cde8 100644
      settings_fifo_ctrl #(.PROT_DEST(3), .PROT_HDR(1)) sfc
      (
          .clock(dsp_clk), .reset(dsp_rst), .clear(sfc_clear),
-@@ -764,8 +848,14 @@ module u2plus_core
+@@ -764,8 +865,14 @@ module u2plus_core
     // /////////////////////////////////////////////////////////////////////////////////////////
     // Debug Pins
  
-+`ifdef CHRIP
++`ifdef CHIRP
 +   assign debug_clk = {dsp_clk, clk_to_mac};
 +   assign debug = {18'd0, vco_init_done, trigger, set_stb_user, run_rx0_d1, spi_chirp_debug[2:0],
 +                   counter_mosi, counter_sclk, counter_sen, mosi, sclk, sen_rx_db, sen_tx_dac};
