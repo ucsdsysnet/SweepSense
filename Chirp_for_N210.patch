@@ -1,4 +1,4 @@
-From cb9fcb87ec8ce969c11f92d7a4ea4d6d1daf41f5 Mon Sep 17 00:00:00 2001
+From f5bed08d14feca0ee543deb66e84c16fed55eade Mon Sep 17 00:00:00 2001
 From: Moein Khazraee <mkhazrae@cs.ucsd.edu>
 Date: Tue, 12 Feb 2019 00:39:59 -0800
 Subject: [PATCH] Adding chirp to Ettus N210 with CBX daughter board.
@@ -8,25 +8,26 @@ Subject: [PATCH] Adding chirp to Ettus N210 with CBX daughter board.
  usrp2/control_lib/chirp_CBX_driver.v    | 429 ++++++++++++++++++++++++
  usrp2/control_lib/chirp_band_selector.v | 142 ++++++++
  usrp2/control_lib/chirp_spi_core.v      | 154 +++++++++
- usrp2/control_lib/gpio_atr.v            |  26 +-
- usrp2/timing/time_compare.v             |  37 +-
+ usrp2/control_lib/gpio_atr.v            |  13 +-
+ usrp2/timing/time_compare.v             |  22 +-
  usrp2/top/N2x0/Makefile.N210R4          |  15 +-
- usrp2/top/N2x0/u2plus_core.v            | 109 +++++-
- 8 files changed, 900 insertions(+), 16 deletions(-)
+ usrp2/top/N2x0/u2plus_core.v            |  95 +++++-
+ 8 files changed, 857 insertions(+), 17 deletions(-)
  create mode 100755 usrp2/control_lib/chirp_CBX_driver.v
  create mode 100644 usrp2/control_lib/chirp_band_selector.v
  create mode 100755 usrp2/control_lib/chirp_spi_core.v
 
 diff --git a/usrp2/control_lib/Makefile.srcs b/usrp2/control_lib/Makefile.srcs
-index 42862a50..cfe827d1 100644
+index 42862a50..1820b867 100644
 --- a/usrp2/control_lib/Makefile.srcs
 +++ b/usrp2/control_lib/Makefile.srcs
-@@ -1,4 +1,5 @@
+@@ -1,5 +1,6 @@
  #
-+# Copyright 2019 The Regents of the University of California
  # Copyright 2010-2012 Ettus Research LLC
++# Copyright 2019 The Regents of the University of California
  #
  
+ ##################################################
 @@ -56,6 +57,9 @@ fifo_to_wb.v \
  gpio_atr.v \
  user_settings.v \
@@ -39,26 +40,26 @@ index 42862a50..cfe827d1 100644
  ))
 diff --git a/usrp2/control_lib/chirp_CBX_driver.v b/usrp2/control_lib/chirp_CBX_driver.v
 new file mode 100755
-index 00000000..ed75b494
+index 00000000..3fd73a11
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_CBX_driver.v
 @@ -0,0 +1,429 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
++//
++// Copyright 2019 The Regents of the University of California
++//
++// This program is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, either version 3 of the License, or
++// (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with this program.  If not, see <http://www.gnu.org/licenses/>.
++//
 +
 +module chirp_CBX_driver(
 +        input clock,
@@ -474,26 +475,26 @@ index 00000000..ed75b494
 +endmodule
 diff --git a/usrp2/control_lib/chirp_band_selector.v b/usrp2/control_lib/chirp_band_selector.v
 new file mode 100644
-index 00000000..805d088b
+index 00000000..42a7715b
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_band_selector.v
 @@ -0,0 +1,142 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
++//
++// Copyright 2019 The Regents of the University of California
++//
++// This program is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, either version 3 of the License, or
++// (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with this program.  If not, see <http://www.gnu.org/licenses/>.
++//
 +
 +// Conidering a one-hot representation of required bands,
 +// as well as knowing the current band it would find the
@@ -622,29 +623,29 @@ index 00000000..805d088b
 +endmodule
 diff --git a/usrp2/control_lib/chirp_spi_core.v b/usrp2/control_lib/chirp_spi_core.v
 new file mode 100755
-index 00000000..b9f2af1d
+index 00000000..2fec04f0
 --- /dev/null
 +++ b/usrp2/control_lib/chirp_spi_core.v
 @@ -0,0 +1,154 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
++//
++// Copyright 2012 Ettus Research LLC
++// Copyright 2019 The Regents of the University of California
++//
++// This program is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, either version 3 of the License, or
++// (at your option) any later version.
++//
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with this program.  If not, see <http://www.gnu.org/licenses/>.
++//
 +
-+// This module is driven from simple_spi_core module by USRP with
-+// GNU General Public License.
++// This module is driven from simple_spi_core.
 +
 +// Sends data over SPI interface. Chip select (sen) is active low.
 +// It only accepts data when in WAIT_TRIG state and latches it upon
@@ -781,30 +782,26 @@ index 00000000..b9f2af1d
 +
 +endmodule
 diff --git a/usrp2/control_lib/gpio_atr.v b/usrp2/control_lib/gpio_atr.v
-index 82d72b81..c0fda086 100644
+index 82d72b81..0aeaa344 100644
 --- a/usrp2/control_lib/gpio_atr.v
 +++ b/usrp2/control_lib/gpio_atr.v
-@@ -1,3 +1,19 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
- 
+@@ -1,6 +1,6 @@
+-
  //
  // Copyright 2011 Ettus Research LLC
-@@ -26,10 +42,10 @@ module gpio_atr
++// Copyright 2019 The Regents of the University of California
+ //
+ // This program is free software: you can redistribute it and/or modify
+ // it under the terms of the GNU General Public License as published by
+@@ -16,6 +16,7 @@
+ // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ //
+ 
++// Hardwired gpio[3] to 1
+ 
+ module gpio_atr
+   #(parameter BASE = 0,
+@@ -26,10 +27,10 @@ module gpio_atr
      inout [WIDTH-1:0] gpio,
      output reg [31:0] gpio_readback
      );
@@ -817,7 +814,7 @@ index 82d72b81..c0fda086 100644
     setting_reg #(.my_addr(BASE+0), .width(WIDTH)) reg_idle
       (.clk(clk),.rst(reset),.strobe(set_stb),.addr(set_addr), .in(set_data),
        .out(in_idle),.changed());
-@@ -57,15 +73,15 @@ module gpio_atr
+@@ -57,15 +58,15 @@ module gpio_atr
         2'b10: rgpio <= in_tx;
         2'b11: rgpio <= in_fdx;
       endcase // case ({tx,rx})
@@ -837,31 +834,25 @@ index 82d72b81..c0fda086 100644
 +
  endmodule // gpio_atr
 diff --git a/usrp2/timing/time_compare.v b/usrp2/timing/time_compare.v
-index 21607f51..542172d1 100644
+index 21607f51..81183ded 100644
 --- a/usrp2/timing/time_compare.v
 +++ b/usrp2/timing/time_compare.v
-@@ -1,3 +1,20 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
-+
+@@ -1,5 +1,6 @@
  //
  // Copyright 2011-2012 Ettus Research LLC
++// Copyright 2019 The Regents of the University of California
  //
-@@ -23,11 +40,25 @@ module time_compare
+ // This program is free software: you can redistribute it and/or modify
+ // it under the terms of the GNU General Public License as published by
+@@ -15,6 +16,7 @@
+ // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ //
+ 
++// Improved critical path to meet timing
+ 
+ // 64 bits worth of ticks
+ 
+@@ -23,11 +25,25 @@ module time_compare
     input [63:0] trigger_time,
     output now,
     output early,
@@ -891,15 +882,16 @@ index 21607f51..542172d1 100644
      assign too_early = 0; //not implemented
  
 diff --git a/usrp2/top/N2x0/Makefile.N210R4 b/usrp2/top/N2x0/Makefile.N210R4
-index 44ce17b3..8f787318 100644
+index 44ce17b3..e5fb3c08 100644
 --- a/usrp2/top/N2x0/Makefile.N210R4
 +++ b/usrp2/top/N2x0/Makefile.N210R4
-@@ -1,4 +1,5 @@
+@@ -1,5 +1,6 @@
  #
-+# Copyright 2019 The Regents of the University of California
  # Copyright 2008-2012 Ettus Research LLC
++# Copyright 2019 The Regents of the University of California
  #
  
+ ##################################################
 @@ -43,7 +44,7 @@ synthesis_tool "XST (VHDL/Verilog)" \
  simulator "ISE Simulator (VHDL/Verilog)" \
  "Preferred Language" "Verilog" \
@@ -942,31 +934,23 @@ index 44ce17b3..8f787318 100644
  
  SIM_MODEL_PROPERTIES = ""
 diff --git a/usrp2/top/N2x0/u2plus_core.v b/usrp2/top/N2x0/u2plus_core.v
-index 649b7dca..3330402a 100644
+index 649b7dca..5f5c072e 100644
 --- a/usrp2/top/N2x0/u2plus_core.v
 +++ b/usrp2/top/N2x0/u2plus_core.v
-@@ -1,3 +1,20 @@
-+/*
-+ * Copyright 2019 The Regents of the University of California
-+ *
-+ * Licensed under the Apache License, Version 2.0 (the "License");
-+ * you may not use this file except in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing, software
-+ * distributed under the License is distributed on an "AS IS" BASIS,
-+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+ * See the License for the specific language governing permissions and
-+ * limitations under the License.
-+ *
-+ */
-+
+@@ -1,5 +1,6 @@
  //
  // Copyright 2011-2013 Ettus Research LLC
++// Copyright 2019 The Regents of the University of California
  //
-@@ -19,6 +36,8 @@
+ // This program is free software: you can redistribute it and/or modify
+ // it under the terms of the GNU General Public License as published by
+@@ -15,10 +16,14 @@
+ // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ //
+ 
++// Added SweepSense top module
++
+ // ////////////////////////////////////////////////////////////////////////////////
  // Module Name:    u2_core
  // ////////////////////////////////////////////////////////////////////////////////
  
@@ -975,7 +959,7 @@ index 649b7dca..3330402a 100644
  module u2plus_core
    (// Clocks
     input dsp_clk,
-@@ -413,6 +432,7 @@ module u2plus_core
+@@ -413,6 +418,7 @@ module u2plus_core
      wire [31:0] spi_debug;
      wire [31:0] spi_readback;
      wire spi_ready;
@@ -983,7 +967,7 @@ index 649b7dca..3330402a 100644
      simple_spi_core #(.BASE(SR_SPI_CORE), .WIDTH(9)) shared_spi(
          .clock(dsp_clk), .reset(dsp_rst),
          .set_stb(set_stb_dsp), .set_addr(set_addr_dsp), .set_data(set_data_dsp),
-@@ -420,6 +440,86 @@ module u2plus_core
+@@ -420,6 +426,86 @@ module u2plus_core
          .sen({sen_adc, sen_tx_db,sen_tx_adc,sen_tx_dac,sen_rx_db,sen_rx_adc,sen_rx_dac,sen_dac,sen_clk}),
          .sclk(sclk), .mosi(mosi), .miso(miso), .debug(spi_debug)
      );
@@ -1052,7 +1036,7 @@ index 649b7dca..3330402a 100644
 +        .sclk(sclk_sys), .mosi(mosi_sys), .miso(miso), .debug(spi_debug)
 +    );
 +
-+    (* keep_hierarchy = "yes" *)
++    (* keep_hierarchy = "soft" *)
 +    chirp_CBX_driver chirp_spi(
 +        .clock(dsp_clk), .reset(dsp_rst),
 +        .set_stb_user(set_stb_user), .set_addr_user(set_addr_user), .set_data_user(set_data_user),
@@ -1070,7 +1054,7 @@ index 649b7dca..3330402a 100644
  
     // /////////////////////////////////////////////////////////////////////////
     // I2C -- Slave #3
-@@ -435,7 +535,6 @@ module u2plus_core
+@@ -435,7 +521,6 @@ module u2plus_core
  
     // /////////////////////////////////////////////////////////////////////////
     // GPIOs
@@ -1078,16 +1062,16 @@ index 649b7dca..3330402a 100644
     wire [31:0] gpio_readback;
  
     gpio_atr #(.BASE(SR_GPIO), .WIDTH(32))
-@@ -515,6 +614,8 @@ module u2plus_core
+@@ -515,6 +600,8 @@ module u2plus_core
  
      wire [31:0] sfc_debug;
      wire sfc_clear;
 +
-+    (* keep_hierarchy = "yes" *)
++    (* keep_hierarchy = "soft" *)
      settings_fifo_ctrl #(.PROT_DEST(3), .PROT_HDR(1)) sfc
      (
          .clock(dsp_clk), .reset(dsp_rst), .clear(sfc_clear),
-@@ -764,8 +865,14 @@ module u2plus_core
+@@ -764,8 +851,14 @@ module u2plus_core
     // /////////////////////////////////////////////////////////////////////////////////////////
     // Debug Pins
  
