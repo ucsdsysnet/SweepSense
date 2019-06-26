@@ -3,7 +3,8 @@ This repo contains FPGA code for adding chirp functionality to USRP N210 with
 CBX daughter board, after the required hardware modification.
 
 This README explain how to use the patch to add chirp functionality to an USRP
-N210 module, and also how to configure the chirp.
+N210 module, and also how to configure the chirp. The patch was generated after
+commit e57dfe075c8056a5afe5528c1bc21e92b5149379. 
 
 To apply the patch go to fpga-src folder and do:
     $ git apply Chirp_for_N210.patch
