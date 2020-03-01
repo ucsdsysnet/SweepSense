@@ -3,7 +3,6 @@
 ######################################################################
 # gr-sweepsense Python Library
 # Version: 1.0
-# Authors: Raghav Subbaraman (rsubbaraman@eng.ucsd.edu), Yeswanth Guddeti (yguddeti@eng.ucsd.edu)
 # 
 # Description: This library contains python code to interface
 # with SweepSense USRPs. Composed of multiple GNURadio flowgraphs
@@ -16,6 +15,25 @@
 # 	2. pickle
 # 	3. pandas
 #
+# LICENSE:
+# Apache 2.0:
+#
+#    Copyright 2019 The Regents of the University of California
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+#
+# Authors: Raghav Subbaraman (rsubbaraman@eng.ucsd.edu), Yeswanth Guddeti (yguddeti@eng.ucsd.edu)
+# 
 # Changelog:
 # 	1. October 31 2019: Script created in library form (v1.0)
 ######################################################################
@@ -54,6 +72,7 @@ class sweep_block(gr.top_block):
 		# Calibrating so do not need a sink (empty calibration)
 		if options.mode == 1 or options.mode == 2 or options.mode == 10:
 			# addr0 is of sweeper
+			# Note that mode 2, 1 and 10 require two time-synced USRPs
 			self.usrp_source = uhd.usrp_source(
 			",".join(("addr0=192.168.10.2,addr1=192.168.20.3", "")),
 			uhd.stream_args(
@@ -70,9 +89,9 @@ class sweep_block(gr.top_block):
 						),
 					)
 		elif options.mode == 3 or options.mode == 0 or options.mode == 30:
-			# device_addr is of sweeper
+			# dev_args is of sweeper
 			self.usrp_source = uhd.usrp_source(
-			",".join(("addr0=192.168.10.3", "")),
+			",".join((options.dev_args, "")),
 			uhd.stream_args(
 			cpu_format="fc32",
 			channels=range(1),
@@ -362,7 +381,7 @@ class cal_block(gr.top_block):
         # Blocks
         ##################################################
         self.usrp_source = uhd.usrp_source(
-        	",".join(("addr=192.168.10.3", "")),
+        	",".join((options.dev_args, "")),
         	uhd.stream_args(
         		cpu_format="fc32",
         		channels=range(1),
@@ -370,7 +389,7 @@ class cal_block(gr.top_block):
         )
         if options.mode !=2 :
             self.uhd_usrp_sink_0 = uhd.usrp_sink(
-                ",".join(("addr=192.168.10.3", "")),
+                ",".join((options.dev_args, "")),
                 uhd.stream_args(
                     cpu_format="fc32",
                     channels=range(1),
@@ -600,6 +619,8 @@ def calibrate(options,top_block_cls = cal_block):
 
 		2. band2: Bitmap for higher VCO bands to sweep. (int32)
 
+		2.1 dev_args: Device Arguments for the USRP
+
 		3. filename: List of path strings for required files. (list)
 
 			[<filename_0>, <save_path>]
@@ -763,6 +784,8 @@ def sweep(options,top_block_cls = sweep_block):
 			the function #TODO#
 
 		2. band2: Bitmap for higher VCO bands to sweep. (int32)
+
+		2.1 dev_args: Device Arguments for the USRP
 
 		3. filename: List of path strings for saving/reading data. (list)
 
