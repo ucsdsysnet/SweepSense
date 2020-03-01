@@ -122,6 +122,28 @@ Chirp driver cycles through the selected rf_divider values in a round robin
 manner and for each rf_divider it would cycle through the selected frequency
 bands.
 
+## VCO Band Mapping
+
+**Register 6 (RF Divider)**:   
+Register 6 = 1 for 3 GHz - 6 GHz   
+Register 6 = 2 for 1.5 GHz - 3 GHz
+
+**Registers 1 and 2 (VCO Band Select)**:  
+Once the correct RF divider has been chosen. The 64 bit VCO band select value has to be
+written to registers 1 and 2 (32 bits each). This value can be obtained from the MAX2870
+datasheet, but we have put down approximate practical values below:
+
+
+![][vco1]
+![][vco2]
+![][vco3]
+![][vco4]
+
+[vco1]: ../docs/2_3Ghz_VCObandmap.png
+[vco2]: ../docs/3_4GHZ_VCObandmap.png
+[vco3]: ../docs/4_5Ghz_VCObandmap.png
+[vco4]: ../docs/5_6Ghz_VCObandmap.png
+
 ## License
 
 Apache 2.0:
