@@ -63,6 +63,9 @@ STEP 3: Obtain calibration samples and combines them according to the list in ``
 
 ```ss1.calibrate(cal_opt)```
 
+NOTE: Remove all connections from all antenna ports for before this step. The calibration samples are by default 
+obtained using TX-RX leakage.
+
 STEP 4: Perform SweepSense capture. 
 
 ```ss1.sweep(sweep_opt)```
