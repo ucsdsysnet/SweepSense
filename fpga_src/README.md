@@ -24,6 +24,12 @@ section.
 
 ## Detailed Description and Installation
 
+### Hardware Modification
+
+Modification to be made on the CBX board (https://files.ettus.com/schematics/cbx/CBX.pdf): Desolder R125 (Page 3). Connect pin 52 of J6 receptacle on CBX (Page 5) to pin 20 of U23 (Page 3) through a 5k Ohm resistor.
+
+### FPGA Source Compilation and Register Space
+
 To apply the patch go to fpga-src folder and do:
     $ git apply Chirp_for_N210.patch
 
