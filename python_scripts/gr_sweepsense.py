@@ -248,7 +248,7 @@ class sweep_block(gr.top_block):
 				# options.filename[1] is the string containing the name of the calibration file
 				# Setting params for sweeper
 				self.usrp_source.set_gain(options.rgain, 0)
-				self.usrp_source.set_antenna("RX2", 0)
+				self.usrp_source.set_antenna(options.rx_ant, 0)
 				self.usrp_source.set_bandwidth(options.samp, 0)
 				self.usrp_source.set_samp_rate(options.samp)
 
